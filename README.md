@@ -13,7 +13,9 @@
 
 GitHub 普通 Git 的单文件上限是 100 MiB；[Release 附件](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)每个文件须小于 2 GiB。安装包和校验文件通过 Release 上传，不提交到 Git 历史。
 
-在联网的 Mac 上，用 GitHub CLI 登录后运行。把示例版本号换成要发布的版本：
+在 GitHub 打开 [Actions → Publish Claude Code offline package](https://github.com/heaplax/claude_offline/actions/workflows/offline-release.yml)，点击 **Run workflow**，输入版本号。GitHub 会从 npm 下载对应的 Linux 包，上传附件并校验后发布。
+
+也可以在联网的 Mac 上用 GitHub CLI 登录后手动上传。把示例版本号换成要发布的版本：
 
 ```bash
 version=2.1.326

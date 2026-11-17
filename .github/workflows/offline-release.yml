@@ -1,0 +1,72 @@
+name: Publish Claude Code offline package
+
+"on":
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Claude Code version (for example, 2.1.326)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: offline-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      npm_config_ignore_scripts: "true"
+      npm_config_registry: https://registry.npmjs.org
+    steps:
+      - name: Download, verify, and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          cd "$RUNNER_TEMP"
+          tag="v$VERSION"
+          archive="anthropic-ai-claude-code-linux-x64-$VERSION.tgz"
+          npm pack "@anthropic-ai/claude-code-linux-x64@$VERSION" --silent
+          tar -tzf "$archive" | awk '$0 == "package/claude" { found=1 } END { exit !found }'
+          sha256sum "$archive" > claude-code-offline.sha256
+          if draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            if [[ "$draft" != true ]]; then
+              echo "Release $tag already exists; it will not be replaced." >&2
+              exit 1
+            fi
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft \
+              --title "Claude Code $VERSION — Linux x86_64 离线包" \
+              --notes '下载两个附件，与 install_claude_linux.sh 放在同一目录后运行 bash install_claude_linux.sh。'
+          fi
+          release_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+            --jq ".[] | select(.tag_name == \"$tag\" and .draft) | .id")
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          for asset in "$archive" claude-code-offline.sha256; do
+            local_digest=$(sha256sum "$asset" | awk '{print $1}')
+            asset_record=$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
+              --jq ".[] | select(.name == \"$asset\") | [.id, .state, .digest] | @tsv")
+            if [[ -n "$asset_record" ]]; then
+              read -r asset_id state digest <<< "$asset_record"
+              if [[ "$state" == uploaded && "$digest" == "sha256:$local_digest" ]]; then
+                continue
+              elif [[ "$state" == starter ]]; then
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id"
+              else
+                echo "Unexpected existing asset: $asset" >&2
+                exit 1
+              fi
+            fi
+            gh release upload "$tag" "$asset" --repo "$GITHUB_REPOSITORY"
+            remote_digest=$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
+              --jq ".[] | select(.name == \"$asset\" and .state == \"uploaded\") | .digest")
+            [[ "$remote_digest" == "sha256:$local_digest" ]]
+          done
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
