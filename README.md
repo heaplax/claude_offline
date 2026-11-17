@@ -2,6 +2,22 @@
 
 适用于 Rocky Linux 9.2 这类使用 glibc 的 Linux x86_64 服务器。
 
+## 服务器能访问 GitHub
+
+克隆本仓库后，在服务器运行：
+
+```bash
+git clone https://github.com/heaplax/claude_offline.git
+cd claude_offline
+bash update_claude_linux.sh
+```
+
+以后想更新时，再运行 `bash update_claude_linux.sh`。脚本直接查询 Anthropic 官方 GitHub Release，当前版本不落后时会跳过下载。下载后会核对官方 SHA-256、运行新版 `--version`，再备份和替换 `~/.local/bin/claude`，并给出回滚命令。无需 sudo、Node.js、npm 或 GitHub 登录。
+
+服务器需能访问 `github.com` 和 GitHub 附件下载域名 `release-assets.githubusercontent.com`。建议退出正在运行的 Claude Code 会话后再更新。
+
+## 服务器无法访问 GitHub
+
 1. 在联网的 Mac 上安装 Node.js/npm，然后运行 `bash download_claude_mac.sh`。默认从 npm 查询 Claude Code 最新正式版本并下载对应的 Linux 包；也可以在命令末尾传入完整版本号。
 2. 把 `install_claude_linux.sh`、下载得到的 `anthropic-ai-claude-code-linux-x64-*.tgz` 和 `claude-code-offline.sha256` 拷到服务器的同一个目录。
 3. 在服务器运行 `bash install_claude_linux.sh`。脚本按校验文件选择包，校验 SHA-256、测试新版本、备份旧入口并替换 `~/.local/bin/claude`。不需要 sudo、Node.js 或网络。
